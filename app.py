@@ -22,6 +22,21 @@ else:
 
 CORS(app, resources={r"/*": {"origins": cors_origins}})
 
+
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        return app.make_default_options_response()
+
+@app.after_request
+def add_cors_headers(response):
+    origin = request.headers.get("Origin", "")
+    if cors_origins == "*" or origin in (cors_origins if isinstance(cors_origins, list) else []):
+        response.headers["Access-Control-Allow-Origin"] = origin or "*"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return response
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
