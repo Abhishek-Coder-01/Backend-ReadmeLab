@@ -13,7 +13,6 @@ load_dotenv()
 
 # ─── App Setup ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
-# Allow local dev by default; set CORS_ORIGINS to a comma-separated list for production.
 cors_origins_env = os.getenv("CORS_ORIGINS", "*").strip()
 if cors_origins_env == "*":
     cors_origins = "*"
@@ -21,6 +20,23 @@ else:
     cors_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
 
 CORS(app, resources={r"/*": {"origins": cors_origins}})
+
+# ─── ✅ CORS FIX: These 2 functions fix CORS on Vercel + Render deployment ─────
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        return app.make_default_options_response()
+
+@app.after_request
+def add_cors_headers(response):
+    origin = request.headers.get("Origin", "")
+    allowed = cors_origins if isinstance(cors_origins, list) else []
+    if cors_origins == "*" or origin in allowed:
+        response.headers["Access-Control-Allow-Origin"] = origin or "*"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return response
+# ─────────────────────────────────────────────────────────────────────────────
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -63,46 +79,28 @@ EDIT_FIELD_MAP = {
 
 # ─── File Type Emoji Mapping ───────────────────────────────────────────────────
 FILE_EMOJIS = {
-    # Config files
     ".env": "🔐", ".env.example": "📋", ".env.local": "🔐",
     ".gitignore": "🚫", ".dockerignore": "🚫",
     "dockerfile": "🐳", "docker-compose.yml": "🐳", "docker-compose.yaml": "🐳",
     ".eslintrc": "📏", ".prettierrc": "✨", ".editorconfig": "⚙️",
-    
-    # JavaScript/TypeScript
     ".js": "📜", ".jsx": "⚛️", ".ts": "📘", ".tsx": "⚛️",
     "package.json": "📦", "package-lock.json": "🔒", "yarn.lock": "🧶",
     "tsconfig.json": "⚙️", "webpack.config.js": "📦", "vite.config.js": "⚡",
     "next.config.js": "▲", "nuxt.config.js": "💚",
-    
-    # Python
     ".py": "🐍", "requirements.txt": "📋", "setup.py": "⚙️", "pyproject.toml": "📦",
     "manage.py": "🎯", "wsgi.py": "🌐", "asgi.py": "⚡",
-    
-    # Java
     ".java": "☕", ".kt": "🟣", ".gradle": "🐘", "pom.xml": "📦",
-    
-    # Web
     ".html": "🌐", ".css": "🎨", ".scss": "💅", ".sass": "💅",
     ".vue": "💚", ".svelte": "🧡",
-    
-    # Data/Config
     ".json": "📋", ".yaml": "📄", ".yml": "📄", ".xml": "📄", ".toml": "📄",
     ".csv": "📊", ".sql": "🗃️",
-    
-    # Documentation
     ".md": "📖", "readme.md": "📚", ".txt": "📝",
-    
-    # Images
     ".png": "🖼️", ".jpg": "🖼️", ".jpeg": "🖼️", ".svg": "🎨", ".gif": "🎞️",
     ".ico": "🎯", "favicon.ico": "🌟",
-    
-    # Other
     ".sh": "🔧", ".bat": "⚙️", ".exe": "⚙️",
     "license": "⚖️", ".gitattributes": "📋",
 }
 
-# --- Title Emoji & Tech Badge Helpers ---
 TITLE_EMOJI_PATTERNS = [
     (r"\bpdf\b", "📄"),
     (r"\bai\b|artificial intelligence", "🤖"),
@@ -181,19 +179,12 @@ TECH_BADGE_ORDER = list(TECH_BADGES.keys())
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 
 def get_file_emoji(filename: str) -> str:
-    """Get appropriate emoji for a file based on its name/extension."""
     filename_lower = filename.lower()
-    
-    # Check exact filename match first
     if filename_lower in FILE_EMOJIS:
         return FILE_EMOJIS[filename_lower]
-    
-    # Check extension match
     for ext, emoji in FILE_EMOJIS.items():
         if ext.startswith(".") and filename_lower.endswith(ext):
             return emoji
-    
-    # Default
     return "📄"
 
 
@@ -202,7 +193,6 @@ def _has_emoji(text: str) -> bool:
 
 
 def add_title_emoji(title: str) -> str:
-    """Add a context-aware emoji prefix to the title when keywords match."""
     if not title:
         return title
     if _has_emoji(title):
@@ -275,7 +265,6 @@ def is_owner_question(text: str) -> bool:
 
 
 def owner_reply(suffix: str = "", next_step: str = "free_chat", user_data: dict = None) -> dict:
-    """Return a standardised owner-question response."""
     msg = f"I was created by **{OWNER_NAME}** 🧑‍💻"
     if suffix:
         msg += f"\n\n{suffix}"
@@ -283,10 +272,8 @@ def owner_reply(suffix: str = "", next_step: str = "free_chat", user_data: dict 
 
 
 def sanitize_history(history: list, max_messages: int = 12, max_chars: int = 2000) -> list:
-    """Validate and trim conversation history before sending to the AI."""
     if not isinstance(history, list):
         return []
-
     cleaned = []
     for item in history:
         if not isinstance(item, dict):
@@ -301,12 +288,10 @@ def sanitize_history(history: list, max_messages: int = 12, max_chars: int = 200
         if len(content) > max_chars:
             content = content[:max_chars] + "..."
         cleaned.append({"role": role, "content": content})
-
     return cleaned[-max_messages:]
 
 
 def call_ai(system_prompt: str, user_prompt: str, timeout: int = 60, history: list = None) -> str:
-    """Call the OpenRouter AI API and return the assistant's reply."""
     messages = [{"role": "system", "content": system_prompt}]
     if history:
         messages.extend(sanitize_history(history))
@@ -332,28 +317,20 @@ def call_ai(system_prompt: str, user_prompt: str, timeout: int = 60, history: li
 
 
 def detect_technologies(stack_str: str) -> dict:
-    """
-    Enhanced technology detection with support for more frameworks and libraries.
-    Returns a dict with boolean flags for detected technologies.
-    """
     stack_lower = stack_str.lower()
-    
-    # Helper function for flexible matching
+
     def has_tech(*keywords):
         return any(kw in stack_lower for kw in keywords)
     def has_word(pattern: str):
         return re.search(pattern, stack_lower) is not None
-    
+
     return {
-        # Frontend Frameworks
         "react": has_tech("react", "reactjs", "react.js"),
         "nextjs": has_tech("next", "nextjs", "next.js"),
         "vue": has_tech("vue", "vuejs", "vue.js"),
         "nuxt": has_tech("nuxt", "nuxtjs", "nuxt.js"),
         "angular": has_tech("angular"),
         "svelte": has_tech("svelte", "sveltekit"),
-        
-        # Backend Frameworks
         "node": has_tech("node", "nodejs", "node.js"),
         "express": has_tech("express", "expressjs", "express.js"),
         "nestjs": has_tech("nest", "nestjs", "nest.js"),
@@ -365,8 +342,6 @@ def detect_technologies(stack_str: str) -> dict:
         "rails": has_tech("rails", "ruby on rails", "ror"),
         "go": has_tech("go", "golang", "gin", "fiber"),
         "rust": has_tech("rust", "actix", "rocket"),
-        
-        # Databases
         "mongodb": has_tech("mongo", "mongodb"),
         "postgresql": has_tech("postgres", "postgresql", "pg"),
         "mysql": has_tech("mysql"),
@@ -375,39 +350,27 @@ def detect_technologies(stack_str: str) -> dict:
         "firebase": has_tech("firebase", "firestore"),
         "supabase": has_tech("supabase"),
         "prisma": has_tech("prisma"),
-        
-        # State Management
         "redux": has_tech("redux", "redux-toolkit"),
         "zustand": has_tech("zustand"),
         "recoil": has_tech("recoil"),
         "mobx": has_tech("mobx"),
-        
-        # Mobile
         "react_native": has_tech("react native", "react-native", "rn"),
         "flutter": has_tech("flutter", "dart"),
         "ionic": has_tech("ionic"),
-        
-        # Desktop
         "electron": has_tech("electron", "electronjs"),
         "tauri": has_tech("tauri"),
-        
-        # Languages
         "typescript": has_tech("typescript") or has_word(r"\bts\b"),
         "javascript": has_tech("javascript", "ecmascript") or has_word(r"\bjs\b"),
         "python": has_tech("python"),
         "java": has_tech("java"),
         "kotlin": has_tech("kotlin"),
         "swift": has_tech("swift"),
-
-        # Static Web
         "html": has_tech("html"),
         "css": has_tech("css"),
         "static_site": (
             has_tech("html", "css", "javascript", "vanilla", "static") or
             has_word(r"\bjs\b")
         ),
-        
-        # Deployment/DevOps
         "docker": has_tech("docker", "container"),
         "kubernetes": has_tech("kubernetes", "k8s"),
         "aws": has_tech("aws", "amazon web services"),
@@ -415,20 +378,14 @@ def detect_technologies(stack_str: str) -> dict:
         "gcp": has_tech("gcp", "google cloud"),
         "vercel": has_tech("vercel"),
         "netlify": has_tech("netlify"),
-        
-        # Build Tools
         "webpack": has_tech("webpack"),
         "vite": has_tech("vite"),
         "rollup": has_tech("rollup"),
         "parcel": has_tech("parcel"),
-        
-        # Testing
         "jest": has_tech("jest"),
         "mocha": has_tech("mocha"),
         "pytest": has_tech("pytest"),
         "cypress": has_tech("cypress"),
-        
-        # CSS Frameworks
         "tailwind": has_tech("tailwind", "tailwindcss"),
         "bootstrap": has_tech("bootstrap"),
         "materialui": has_tech("material-ui", "mui", "material ui"),
@@ -437,25 +394,11 @@ def detect_technologies(stack_str: str) -> dict:
 
 
 def _infer_structure(stack_str: str, project_name: str) -> str:
-    """
-    Dynamically build a detailed, annotated directory tree based on the
-    detected tech stack with appropriate emojis for each file type.
-    """
     tech = detect_technologies(stack_str)
-    
-    # Determine file extension
     ext = "ts" if tech["typescript"] else "js"
-    py_ext = "py"
-    
-    # Sanitize folder name
     folder = re.sub(r'[^a-z0-9-]', '-', project_name.lower()).strip('-') or "my-project"
-    
     lines = [f"{folder}/", "│"]
-    
-    # ══════════════════════════════════════════════════════════════════════════
-    # FRONTEND
-    # ══════════════════════════════════════════════════════════════════════════
-    
+
     if tech["nextjs"]:
         lines += [
             "├── 📂 app/                             # Next.js 13+ App Router",
@@ -489,7 +432,6 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
             f"│   └── {get_file_emoji(f'utils.{ext}')} utils.{ext}                 # Helper functions",
             "│",
         ]
-        
     elif tech["react"]:
         lines += [
             "├── 📂 client/                          # React frontend application",
@@ -512,7 +454,6 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
             f"│       │   └── {get_file_emoji(f'Register.{ext}x')} Register.{ext}x  # Registration page",
             "│       │",
         ]
-        
         if tech["redux"]:
             lines += [
                 "│       ├── 📂 redux/                   # Redux Toolkit store & slices",
@@ -521,7 +462,6 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
                 f"│       │   └── {get_file_emoji(f'dataSlice.{ext}')} dataSlice.{ext} # Data state slice",
                 "│       │",
             ]
-        
         lines += [
             "│       ├── 📂 hooks/                   # Custom React hooks",
             f"│       │   ├── {get_file_emoji(f'useAuth.{ext}')} useAuth.{ext}     # Auth hook",
@@ -536,7 +476,6 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
             f"│       └── {get_file_emoji('index.css')} index.css                  # Global styles",
             "│",
         ]
-
     elif tech["static_site"]:
         lines += [
             "├── 📂 src/                             # Static website source",
@@ -549,7 +488,6 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
             f"│       └── {get_file_emoji('logo.png')} logo.png                   # Branding asset",
             "│",
         ]
-
     elif tech["vue"]:
         lines += [
             "├── 📂 frontend/                        # Vue.js frontend application",
@@ -572,7 +510,6 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
             f"│       └── {get_file_emoji('main.js')} main.js                     # Entry point",
             "│",
         ]
-    
     elif tech["angular"]:
         lines += [
             "├── 📂 frontend/                        # Angular frontend",
@@ -585,17 +522,10 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
             f"│       └── {get_file_emoji('main.ts')} main.ts                     # Bootstrap",
             "│",
         ]
-    
-    # ══════════════════════════════════════════════════════════════════════════
-    # BACKEND
-    # ══════════════════════════════════════════════════════════════════════════
-    
+
     if tech["node"] or tech["express"] or tech["nestjs"]:
         backend_name = "server" if not tech["nestjs"] else "backend"
-        lines += [
-            f"├── 📂 {backend_name}/                          # Backend application",
-        ]
-        
+        lines += [f"├── 📂 {backend_name}/                          # Backend application"]
         if tech["nestjs"]:
             lines += [
                 "│   ├── 📂 src/",
@@ -622,7 +552,6 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
                 lines.append(f"│   │   └── {get_file_emoji(f'redis.{ext}')} redis.{ext}                # Redis client")
             else:
                 lines.append(f"│   │   └── {get_file_emoji(f'env.{ext}')} env.{ext}                    # Env validation")
-            
             lines += [
                 "│   │",
                 "│   ├── 📂 controllers/                 # Request handlers",
@@ -647,7 +576,6 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
                 f"│   └── {get_file_emoji(f'server.{ext}')} server.{ext}                   # App entry point",
                 "│",
             ]
-    
     elif tech["django"]:
         lines += [
             "├── 📂 backend/                         # Django backend",
@@ -670,7 +598,6 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
             f"│   └── {get_file_emoji('requirements.txt')} requirements.txt       # Dependencies",
             "│",
         ]
-    
     elif tech["flask"]:
         lines += [
             "├── 📂 backend/                         # Flask backend",
@@ -691,7 +618,6 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
             f"│   └── {get_file_emoji('requirements.txt')} requirements.txt       # Dependencies",
             "│",
         ]
-    
     elif tech["fastapi"]:
         lines += [
             "├── 📂 backend/                         # FastAPI backend",
@@ -713,7 +639,6 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
             f"│   └── {get_file_emoji('requirements.txt')} requirements.txt       # Dependencies",
             "│",
         ]
-    
     elif tech["python"]:
         lines += [
             "├── 📂 backend/                         # Python backend",
@@ -731,11 +656,7 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
             f"│   └── {get_file_emoji('requirements.txt')} requirements.txt       # Dependencies",
             "│",
         ]
-    
-    # ══════════════════════════════════════════════════════════════════════════
-    # MOBILE
-    # ══════════════════════════════════════════════════════════════════════════
-    
+
     if tech["react_native"]:
         lines += [
             "├── 📂 mobile/                          # React Native app",
@@ -749,7 +670,6 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
             f"│   └── {get_file_emoji('package.json')} package.json               # Dependencies",
             "│",
         ]
-    
     elif tech["flutter"]:
         lines += [
             "├── 📂 mobile/                          # Flutter app",
@@ -762,11 +682,7 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
             f"│   └── {get_file_emoji('pubspec.yaml')} pubspec.yaml               # Dependencies",
             "│",
         ]
-    
-    # ══════════════════════════════════════════════════════════════════════════
-    # DOCKER / DOCS / ROOT FILES
-    # ══════════════════════════════════════════════════════════════════════════
-    
+
     if tech["docker"]:
         lines += [
             f"├── {get_file_emoji('dockerfile')} Dockerfile                       # Container image definition",
@@ -774,50 +690,38 @@ def _infer_structure(stack_str: str, project_name: str) -> str:
             f"├── {get_file_emoji('.dockerignore')} .dockerignore                 # Docker ignore file",
             "│",
         ]
-    
+
     lines += [
         "├── 📂 docs/                                # Documentation",
         f"│   ├── {get_file_emoji('API.md')} API.md                           # API reference",
         f"│   ├── {get_file_emoji('SETUP.md')} SETUP.md                       # Setup guide",
         f"│   └── {get_file_emoji('CONTRIBUTING.md')} CONTRIBUTING.md         # Contribution guidelines",
         "│",
-    ]
-    
-    # Root files
-    lines += [
         f"├── {get_file_emoji('.env.example')} .env.example                       # Environment template",
         f"├── {get_file_emoji('.gitignore')} .gitignore                           # Git ignore rules",
     ]
-    
+
     if tech["node"] or tech["react"] or tech["vue"]:
         lines.append(f"├── {get_file_emoji('package.json')} package.json                         # Node dependencies & scripts")
         lines.append(f"├── {get_file_emoji('package-lock.json')} package-lock.json                   # Lock file")
-    
     if tech["python"]:
         lines.append(f"├── {get_file_emoji('requirements.txt')} requirements.txt                     # Python dependencies")
-    
     if tech["typescript"]:
         lines.append(f"├── {get_file_emoji('tsconfig.json')} tsconfig.json                         # TypeScript config")
-    
     if tech["tailwind"]:
         lines.append(f"├── {get_file_emoji('tailwind.config.js')} tailwind.config.js                   # Tailwind config")
-    
     if tech["jest"]:
         lines.append(f"├── {get_file_emoji('jest.config.js')} jest.config.js                         # Jest test config")
-    
+
     lines += [
         f"├── {get_file_emoji('license')} LICENSE                               # Project license",
         f"└── {get_file_emoji('readme.md')} README.md                           # You are here 📍",
     ]
-    
+
     return "\n".join(lines)
 
 
 def build_readme_prompt(user_data: dict) -> str:
-    """
-    Build a rich, structured prompt that instructs the AI to produce
-    a professional, fully-featured README.md.
-    """
     current_year  = datetime.now().year
     project_name  = user_data.get("project_name", "My Project")
     description   = user_data.get("description",  "A software project.")
@@ -856,40 +760,19 @@ PROJECT STRUCTURE  (use EXACTLY as-is inside a code block)
 REQUIRED SECTIONS (in this order)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1.  TITLE SECTION
-
-    - The FIRST line of the README must be:
-          # {{Title (use EXACTLY as provided above)}}
-
+    - The FIRST line of the README must be: # {{Title (use EXACTLY as provided above)}}
     - Immediately below the title, render centered shields.io badges.
+    - If BADGES BLOCK is provided (not "(none)"): Paste it EXACTLY as-is.
+    - If BADGES BLOCK is "(none)": Auto-generate shields.io badges for each tech.
 
-    - If BADGES BLOCK is provided (not "(none)"):
-          • Paste it EXACTLY as-is.
-          • Do NOT modify.
-          • Do NOT regenerate.
-          • Do NOT change styling.
-
-    - If BADGES BLOCK is "(none)":
-          • Automatically generate shields.io badges for each technology in Tech Stack.
-          • Use style=for-the-badge.
-          • Use official logo (logo= parameter).
-          • Center them inside:
-                <p align="center"> ... </p>
-2.  BANNER image
-    IMPORTANT:
-    - Use the EXACT HTML below.
-    - Do NOT change type, color, animation, height, fontSize, layout, or styling.
-    - Do NOT redesign.
-    - Keep shark type and gradient EXACTLY the same.
-    - Only replace text and desc values if necessary.
-    
+2.  BANNER image - Use EXACT HTML below:
     <p align="center">
   <img src="https://capsule-render.vercel.app/api?type=shark&color=0:4158D0,100:C850C0&height=300&section=header&text=AI%20Revolution&fontSize=70&fontColor=ffffff&animation=twinkling&fontAlignY=35&desc=Intelligent%20Automation%20Platform&descAlignY=55&descSize=25" width="100%"/>
 </p>
-
 <p align="center">
   <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=24&duration=3000&pause=1000&color=00C4F7&center=true&vCenter=true&width=600&lines=Building+The+Future+of+AI;Intelligent+Automation+Solutions;Next-Gen+Machine+Learning;Production-Ready+AI+Systems" alt="Typing SVG" />
 </p>
-    
+
 3.  TABLE OF CONTENTS   →  anchor links to every section
 4.  OVERVIEW            →  2-3 sentences, what problem it solves
 5.  KEY FEATURES        →  bullet list, each item one sentence, with emoji prefix
@@ -902,31 +785,22 @@ REQUIRED SECTIONS (in this order)
         Run             →  dev + production commands
 9.  USAGE               →  2-3 concrete examples with code snippets
 10. API REFERENCE       →  table of main endpoints if a backend exists
-        (Method | Endpoint | Description | Auth Required)
-11. SCREENSHOTS         →  placeholder section with HTML img tags + captions inside a flex container
-                             (use a <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;"> and
-                              each screenshot in a <figure> with <img> + <figcaption>)
+11. SCREENSHOTS         →  placeholder section with HTML img tags + captions
 12. LIVE DEMO           →  badge + link (or "Coming Soon" if not available)
-13. REQUIREMENTS        →  two sub-sections:
-        Functional Requirements     →  [ ] checklist of what the app must DO
-        Non-Functional Requirements →  [ ] checklist of quality attributes
-                                        (performance, security, scalability,
-                                         accessibility, reliability, etc.)
-14. ROADMAP             →  [ ] unchecked items grouped under Near-term / Future
-15. CONTRIBUTING        →  fork → branch → commit → PR steps + code style note
+13. REQUIREMENTS        →  Functional + Non-Functional checklists
+14. ROADMAP             →  [ ] items grouped under Near-term / Future
+15. CONTRIBUTING        →  fork → branch → commit → PR steps
 16. LICENSE             →  MIT badge + one-line description
 17. CONTACT             →  Author name, GitHub link placeholder, email placeholder
-18. FOOTER              →  centered: © {current_year} {project_name}. All Rights Reserved. Built with ❤️ by {author}
+18. FOOTER              →  centered: © {current_year} {project_name}. Built with ❤️ by {author}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STYLE RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- Use relevant emojis in section headings (one per heading, not more).
+- Use relevant emojis in section headings.
 - All shields.io badges must use style=for-the-badge.
-- Use logos (logo=) in badges wherever possible.
-- Every code block must declare its language (bash, js, python, env, etc.).
+- Every code block must declare its language.
 - Keep heading hierarchy: # for title, ## for sections, ### for sub-sections.
-- Use HTML <details><summary> blocks for long sub-sections (e.g. full API table).
 - Do NOT wrap the output in triple backticks — return raw Markdown only.
 - Do NOT add any preamble, commentary, or closing note outside the Markdown.
 """
@@ -934,7 +808,6 @@ STYLE RULES
 
 # ─── Routes ────────────────────────────────────────────────────────────────────
 
-# 🔹 Standard API Response Function
 def api_response(status="success", message="", data=None, code=200):
     return jsonify({
         "status": status,
@@ -944,7 +817,6 @@ def api_response(status="success", message="", data=None, code=200):
     }), code
 
 
-# 🔹 Health Check Route (BEST PRACTICE)
 @app.route("/api/health", methods=["GET"])
 def health_check():
     return api_response(
@@ -955,7 +827,6 @@ def health_check():
     )
 
 
-# 🔹 Root Route
 @app.route("/", methods=["GET"])
 def index():
     return api_response(
@@ -964,24 +835,14 @@ def index():
     )
 
 
-# 🔹 404 Error Handler
 @app.errorhandler(404)
 def not_found(error):
-    return api_response(
-        status="error",
-        message="Route not found",
-        code=404
-    )
+    return api_response(status="error", message="Route not found", code=404)
 
 
-# 🔹 500 Error Handler
 @app.errorhandler(500)
 def server_error(error):
-    return api_response(
-        status="error",
-        message="Internal server error",
-        code=500
-    )
+    return api_response(status="error", message="Internal server error", code=500)
 
 
 @app.route("/chat", methods=["POST"])
@@ -993,7 +854,6 @@ def chat():
         user_message = data.get("user_message", "").strip()
         history      = data.get("history", [])
 
-        # ── Initial greeting ────────────────────────────────────────────────────
         if step == "init":
             return jsonify({
                 "reply": (
@@ -1006,21 +866,16 @@ def chat():
                 "user_data": user_data,
             })
 
-        # ── Owner question (global shortcut) ───────────────────────────────────
         if is_owner_question(user_message):
             return jsonify(owner_reply(next_step=step, user_data=user_data))
 
-        # ── Dispatch to step handlers ──────────────────────────────────────────
         if step == "free_chat":
             return _handle_free_chat(user_message, user_data, history)
 
         if step == "readme_ask_name":
             user_data["name"] = user_message
             return jsonify({
-                "reply": (
-                    f"Nice to meet you, **{user_message}**! 🙌\n\n"
-                    "What is the **title / name** of your project?"
-                ),
+                "reply": f"Nice to meet you, **{user_message}**! 🙌\n\nWhat is the **title / name** of your project?",
                 "next_step": "readme_ask_title",
                 "user_data": user_data,
             })
@@ -1028,10 +883,7 @@ def chat():
         if step == "readme_ask_title":
             user_data["project_name"] = user_message
             return jsonify({
-                "reply": (
-                    f"**{user_message}** — love it! 🚀\n\n"
-                    "Give me a **brief description** of what your project does:"
-                ),
+                "reply": f"**{user_message}** — love it! 🚀\n\nGive me a **brief description** of what your project does:",
                 "next_step": "readme_ask_description",
                 "user_data": user_data,
             })
@@ -1039,11 +891,7 @@ def chat():
         if step == "readme_ask_description":
             user_data["description"] = user_message
             return jsonify({
-                "reply": (
-                    "Great description! 📝\n\n"
-                    "What **tech stack** are you using?\n"
-                    "*(e.g. React, Node.js, Python, Flask, MongoDB…)*"
-                ),
+                "reply": "Great description! 📝\n\nWhat **tech stack** are you using?\n*(e.g. React, Node.js, Python, Flask, MongoDB…)*",
                 "next_step": "readme_ask_tech",
                 "user_data": user_data,
             })
@@ -1051,11 +899,7 @@ def chat():
         if step == "readme_ask_tech":
             user_data["tech_stack"] = user_message
             return jsonify({
-                "reply": (
-                    "Nice stack! 💻\n\n"
-                    "Do you have a **live demo link**?\n"
-                    "*(Paste the URL, or type `none`)*"
-                ),
+                "reply": "Nice stack! 💻\n\nDo you have a **live demo link**?\n*(Paste the URL, or type `none`)*",
                 "next_step": "readme_ask_live",
                 "user_data": user_data,
             })
@@ -1086,27 +930,15 @@ def chat():
 
     except requests.exceptions.Timeout:
         logger.error("AI API request timed out.")
-        return jsonify({
-            "reply": "⏳ The AI took too long to respond. Please try again.",
-            "next_step": "free_chat",
-            "user_data": {},
-        }), 504
+        return jsonify({"reply": "⏳ The AI took too long to respond. Please try again.", "next_step": "free_chat", "user_data": {}}), 504
 
     except requests.exceptions.RequestException as exc:
         logger.error("Network error calling AI API: %s", exc)
-        return jsonify({
-            "reply": "❌ Network error. Please check your connection.",
-            "next_step": "free_chat",
-            "user_data": {},
-        }), 502
+        return jsonify({"reply": "❌ Network error. Please check your connection.", "next_step": "free_chat", "user_data": {}}), 502
 
     except Exception as exc:
         logger.exception("Unexpected error in /chat")
-        return jsonify({
-            "reply": f"❌ Unexpected error: {exc}",
-            "next_step": "free_chat",
-            "user_data": {},
-        }), 500
+        return jsonify({"reply": f"❌ Unexpected error: {exc}", "next_step": "free_chat", "user_data": {}}), 500
 
 
 # ─── Step Handlers ─────────────────────────────────────────────────────────────
@@ -1118,7 +950,6 @@ def _handle_free_chat(user_message: str, user_data: dict, history: list):
             "next_step": "readme_ask_name",
             "user_data": {},
         })
-
     system = (
         f"You are {BOT_NAME}, a friendly and helpful AI assistant created by {OWNER_NAME}. "
         "You can answer any question — coding, general knowledge, advice, jokes, anything. "
@@ -1132,18 +963,11 @@ def _handle_free_chat(user_message: str, user_data: dict, history: list):
 
 def _handle_readme_confirm(user_message: str, user_data: dict):
     msg_lower = user_message.lower()
-
-    # ── Handle field-edit requests ─────────────────────────────────────────────
     if any(k in msg_lower for k in ("change", "edit", "update", "modify")):
         for keywords, (next_step, reply_text) in EDIT_FIELD_MAP.items():
             if any(k in msg_lower for k in keywords):
-                return jsonify({
-                    "reply": reply_text,
-                    "next_step": next_step,
-                    "user_data": user_data,
-                })
+                return jsonify({"reply": reply_text, "next_step": next_step, "user_data": user_data})
 
-    # ── Confirmed — generate README ────────────────────────────────────────────
     if "yes" in msg_lower or msg_lower == "y":
         readme_content = call_ai(
             system_prompt=(
@@ -1173,14 +997,12 @@ def _handle_readme_confirm(user_message: str, user_data: dict):
 
 def _handle_post_readme(user_message: str, user_data: dict, history: list):
     msg_lower = user_message.lower().strip()
-
     if is_readme_trigger(user_message) or msg_lower in ("new", "restart", "start over"):
         return jsonify({
             "reply": "Let's create a **new README**! 🎉\n\nWhat is your **name**?",
             "next_step": "readme_ask_name",
             "user_data": {},
         })
-
     project_context = (
         f"Project: {user_data.get('project_name', '')}, "
         f"Tech: {user_data.get('tech_stack', '')}, "
@@ -1204,14 +1026,8 @@ def download_readme():
         content = request.get_json(force=True).get("content", "")
         if not content:
             return jsonify({"success": False, "error": "No content provided."}), 400
-
         stream = io.BytesIO(content.encode("utf-8"))
-        return send_file(
-            stream,
-            mimetype="text/markdown",
-            as_attachment=True,
-            download_name="README.md",
-        )
+        return send_file(stream, mimetype="text/markdown", as_attachment=True, download_name="README.md")
     except Exception as exc:
         logger.exception("Error in /download")
         return jsonify({"success": False, "error": str(exc)}), 500
