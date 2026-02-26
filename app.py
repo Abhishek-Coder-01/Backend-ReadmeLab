@@ -18,7 +18,15 @@ cors_origins_env = os.getenv("CORS_ORIGINS", "*").strip()
 if cors_origins_env == "*":
     cors_origins = "*"
 else:
-    cors_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+    cors_origins = []
+    for o in cors_origins_env.split(","):
+        o = o.strip()
+        if not o:
+            continue
+        # Normalize: remove trailing slash so it matches Origin header
+        if o.endswith("/"):
+            o = o[:-1]
+        cors_origins.append(o)
 
 CORS(app, resources={r"/*": {"origins": cors_origins}})
 
@@ -31,8 +39,9 @@ def handle_preflight():
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get("Origin", "")
-    if cors_origins == "*" or origin in (cors_origins if isinstance(cors_origins, list) else []):
-        response.headers["Access-Control-Allow-Origin"] = origin or "*"
+    origin_norm = origin[:-1] if origin.endswith("/") else origin
+    if cors_origins == "*" or origin_norm in (cors_origins if isinstance(cors_origins, list) else []):
+        response.headers["Access-Control-Allow-Origin"] = origin_norm or "*"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return response
@@ -1002,7 +1011,7 @@ def server_error(error):
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
-        data         = request.get_json(force=True)
+        data         = request.get_json(silent=True) or {}
         step         = data.get("step", "free_chat")
         user_data    = data.get("user_data", {})
         user_message = data.get("user_message", "").strip()
@@ -1216,7 +1225,8 @@ def _handle_post_readme(user_message: str, user_data: dict, history: list):
 @app.route("/download", methods=["POST"])
 def download_readme():
     try:
-        content = request.get_json(force=True).get("content", "")
+        payload = request.get_json(silent=True) or {}
+        content = payload.get("content", "")
         if not content:
             return jsonify({"success": False, "error": "No content provided."}), 400
 
