@@ -13,7 +13,14 @@ load_dotenv()
 
 # ─── App Setup ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
-CORS(app)
+# Allow local dev by default; set CORS_ORIGINS to a comma-separated list for production.
+cors_origins_env = os.getenv("CORS_ORIGINS", "*").strip()
+if cors_origins_env == "*":
+    cors_origins = "*"
+else:
+    cors_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+
+CORS(app, resources={r"/*": {"origins": cors_origins}})
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
