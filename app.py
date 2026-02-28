@@ -13,7 +13,34 @@ load_dotenv()
 
 # ─── App Setup ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
-CORS(app)
+
+CORS(app,
+    origins=[
+        "https://frontend-readme-lab.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ],
+    methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+)
+
+@app.after_request
+def add_cors_headers(response):
+    origin = request.headers.get("Origin", "")
+    allowed_origins = [
+        "https://frontend-readme-lab.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ]
+    if origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return response
+
+@app.route("/ping", methods=["GET", "OPTIONS"])
+def ping():
+    return jsonify({"status": "awake"}), 200
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
