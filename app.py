@@ -13,34 +13,7 @@ load_dotenv()
 
 # ─── App Setup ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
-
-CORS(app,
-    origins=[
-        "https://frontend-readme-lab.vercel.app",
-        "http://localhost:5173",
-        "http://localhost:3000",
-    ],
-    methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type"],
-)
-
-@app.after_request
-def add_cors_headers(response):
-    origin = request.headers.get("Origin", "")
-    allowed_origins = [
-        "https://frontend-readme-lab.vercel.app",
-        "http://localhost:5173",
-        "http://localhost:3000",
-    ]
-    if origin in allowed_origins:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    return response
-
-@app.route("/ping", methods=["GET", "OPTIONS"])
-def ping():
-    return jsonify({"status": "awake"}), 200
+CORS(app)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -51,7 +24,7 @@ if not API_KEY:
 
 # ─── Bot Identity ──────────────────────────────────────────────────────────────
 OWNER_NAME = "Abhishek"
-BOT_NAME   = "ReadmeLab"
+BOT_NAME   = "README AI"
 AI_MODEL   = "openai/gpt-4o-mini"
 
 # ─── Trigger Keywords ──────────────────────────────────────────────────────────
@@ -875,41 +848,9 @@ PROJECT STRUCTURE  (use EXACTLY as-is inside a code block)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 REQUIRED SECTIONS (in this order)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1.  TITLE SECTION
-
-    - The FIRST line of the README must be:
-          # {{Title (use EXACTLY as provided above)}}
-
-    - Immediately below the title, render centered shields.io badges.
-
-    - If BADGES BLOCK is provided (not "(none)"):
-          • Paste it EXACTLY as-is.
-          • Do NOT modify.
-          • Do NOT regenerate.
-          • Do NOT change styling.
-
-    - If BADGES BLOCK is "(none)":
-          • Automatically generate shields.io badges for each technology in Tech Stack.
-          • Use style=for-the-badge.
-          • Use official logo (logo= parameter).
-          • Center them inside:
-                <p align="center"> ... </p>
-2.  BANNER image
-    IMPORTANT:
-    - Use the EXACT HTML below.
-    - Do NOT change type, color, animation, height, fontSize, layout, or styling.
-    - Do NOT redesign.
-    - Keep shark type and gradient EXACTLY the same.
-    - Only replace text and desc values if necessary.
-    
-    <p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=shark&color=0:4158D0,100:C850C0&height=300&section=header&text=AI%20Revolution&fontSize=70&fontColor=ffffff&animation=twinkling&fontAlignY=35&desc=Intelligent%20Automation%20Platform&descAlignY=55&descSize=25" width="100%"/>
-</p>
-
-<p align="center">
-  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=24&duration=3000&pause=1000&color=00C4F7&center=true&vCenter=true&width=600&lines=Building+The+Future+of+AI;Intelligent+Automation+Solutions;Next-Gen+Machine+Learning;Production-Ready+AI+Systems" alt="Typing SVG" />
-</p>
-    
+1.  TITLE (use provided Title EXACTLY) + centered shields.io badges for every technology
+    (paste the BADGES BLOCK exactly if provided)
+2.  BANNER placeholder  →  <p align="center"><img src="./assets/banner.png" width="100%"/></p>
 3.  TABLE OF CONTENTS   →  anchor links to every section
 4.  OVERVIEW            →  2-3 sentences, what problem it solves
 5.  KEY FEATURES        →  bullet list, each item one sentence, with emoji prefix
@@ -954,54 +895,9 @@ STYLE RULES
 
 # ─── Routes ────────────────────────────────────────────────────────────────────
 
-# 🔹 Standard API Response Function
-def api_response(status="success", message="", data=None, code=200):
-    return jsonify({
-        "status": status,
-        "message": message,
-        "data": data,
-        "timestamp": datetime.utcnow().isoformat(),
-    }), code
-
-
-# 🔹 Health Check Route (BEST PRACTICE)
-@app.route("/api/health", methods=["GET"])
-def health_check():
-    return api_response(
-        status="success",
-        message="Backend is running perfectly 🚀",
-        data={"server": "Flask", "version": "1.0.0"},
-        code=200
-    )
-
-
-# 🔹 Root Route
-@app.route("/", methods=["GET"])
+@app.route("/")
 def index():
-    return api_response(
-        message="Welcome to ReadmeLab Backend API",
-        data={"status_code": 200}
-    )
-
-
-# 🔹 404 Error Handler
-@app.errorhandler(404)
-def not_found(error):
-    return api_response(
-        status="error",
-        message="Route not found",
-        code=404
-    )
-
-
-# 🔹 500 Error Handler
-@app.errorhandler(500)
-def server_error(error):
-    return api_response(
-        status="error",
-        message="Internal server error",
-        code=500
-    )
+    return render_template("index.html")
 
 
 @app.route("/chat", methods=["POST"])
@@ -1144,7 +1040,7 @@ def _handle_free_chat(user_message: str, user_data: dict, history: list):
         "You can answer any question — coding, general knowledge, advice, jokes, anything. "
         "Keep responses concise and friendly. "
         "If the user wants to create a README, tell them to say 'create README'. "
-        "Never reveal that you are GPT or any other model. You are ReadmeLab, made by Abhishek."
+        "Never reveal that you are GPT or any other model. You are README AI, made by Abhishek."
     )
     reply = call_ai(system, user_message, timeout=45, history=history)
     return jsonify({"reply": reply, "next_step": "free_chat", "user_data": user_data})
