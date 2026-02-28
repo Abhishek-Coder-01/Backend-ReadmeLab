@@ -900,6 +900,11 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/api/health", methods=["GET"])
+def health_check():
+    return jsonify({"status": "ok", "service": "backend-readmelab"}), 200
+
+
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
